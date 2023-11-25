@@ -3,6 +3,7 @@
         "valid-url": "^1.0.9",
         "request":"^2.88.2",
         "rrule-alt":"^2.2.8",
+        "rrule":"^2.7.1",
         "moment":"^2.29.4"
     }
 }
