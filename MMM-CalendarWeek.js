@@ -615,6 +615,10 @@ Module.register("MMM-CalendarWeek", {
 						  continue;
 					}
 				}
+				// Skip events that have already ended
+				if (event.endDate < now) {
+					continue;
+				}
 				if(this.config.hideOngoing) {
 					if(event.startDate < now) {
 						continue;
