@@ -355,6 +355,7 @@ Module.register("MMM-CalendarWeek", {
 
 				if(this.config.timeFormat === "dateheaders"){
 
+					eventWrapper.appendChild(titleWrapper);
 					if (event.fullDayEvent) {
 						titleWrapper.colSpan = "2";
 						titleWrapper.align = "left";
@@ -363,7 +364,7 @@ Module.register("MMM-CalendarWeek", {
 						var timeWrapper = document.createElement("td");
 						timeWrapper.className = "time light";
 						timeWrapper.align = "left";
-						timeWrapper.style.paddingLeft = "2px";
+						//timeWrapper.style.paddingLeft = "2px";
 						var timeFormatString = "";
 						switch (config.timeFormat) {
 						case 12: {
@@ -382,14 +383,13 @@ Module.register("MMM-CalendarWeek", {
 						timeWrapper.innerHTML = moment(event.startDate, "x").format(timeFormatString);
 
 						if (this.config.showEndDate) {
-							timeWrapper.innerHTML = timeWrapper.innerHTML + "</br>" + moment(event.endDate, "x").format(timeFormatString);
+							timeWrapper.innerHTML = timeWrapper.innerHTML + " - " + moment(event.endDate, "x").format(timeFormatString);
 						}
 
 						eventWrapper.appendChild(timeWrapper);
 						titleWrapper.align = "left";
 					}
 
-					eventWrapper.appendChild(titleWrapper);
 				}else{
 					var timeWrapper = document.createElement("td");
 

@@ -24,7 +24,13 @@
 }
 
 .col {
- width: 20%;
- min-width: 20%;
-  vertical-align: top;
+	/* width: 20%; Removed for dynamic column widths */
+	
+	padding-left: 0.5em;
+    border-left: 1px solid darkgrey;
+    min-width: 20%;
+    vertical-align: top;
+}
+.col .time {
+	padding-left: 15px;
 }
