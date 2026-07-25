@@ -818,7 +818,7 @@ Module.register("MMM-CalendarWeek", {
 		for (var url in this.calendarData) {
 			var calendar = this.calendarData[url];
 			for (var e in calendar) {
-				var event = cloneObject(calendar[e]);
+				var event = Object.assign({}, calendar[e]);
 				event.symbol = this.symbolsForUrl(url);
 				event.color = this.colorForUrl(url);
 				delete event.url;
