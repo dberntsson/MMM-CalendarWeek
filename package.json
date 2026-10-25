@@ -1,9 +1,12 @@
 {
     "dependencies": {
         "valid-url": "^1.0.9",
-        "request":"^2.88.2",
-        "rrule-alt":"^2.2.8",
-        "rrule":"^2.7.1",
-        "moment":"^2.29.4"
+        "request": "^2.88.2",
+        "rrule-alt": "^2.2.8",
+        "rrule": "^2.8.1",
+        "moment": "^2.29.4"
+    },
+    "scripts": {
+        "test": "node --test test/*.test.js"
     }
 }

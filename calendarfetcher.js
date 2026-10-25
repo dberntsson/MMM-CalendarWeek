@@ -110,6 +110,8 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 
 					// calculate the duration f the event for use with recurring events.
 					var duration = parseInt(endDate.format("x")) - parseInt(startDate.format("x"));
+					var dateOnly = event.start.dateOnly === true;
+					var durationDays = dateOnly ? Math.max(1, endDate.diff(startDate, "days")) : null;
 
 					if (event.start.length === 8) {
 						startDate = startDate.startOf("day");
@@ -202,9 +204,9 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 							{
 								// Only add dates that weren't already in the range we added from the rrule so that
 								// we don"t double-add those events.
-								if (moment(new Date(r)).isBetween(pastMoment, futureMoment) != true)
+								if (!(dateOnly ? moment(r, "YYYY-MM-DD") : moment(new Date(r))).isBetween(pastMoment, futureMoment, undefined, "[]"))
 								{
-									dates.push(new Date(r));
+									dates.push(dateOnly ? moment(r, "YYYY-MM-DD").toDate() : new Date(r));
 								}
 							}
 						}
@@ -215,7 +217,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 							// ical.js started returning recurrences and exdates as ISOStrings without time information.
 							// .toISOString().substring(0,10) is the method they use to calculate keys, so we'll do the same
 							// (see https://github.com/peterbraden/ical.js/pull/84 )
-							var dateKey = date.toISOString().substring(0,10);
+							var dateKey = dateOnly ? moment(date).format("YYYY-MM-DD") : date.toISOString().substring(0,10);
 							var curEvent = event;
 							var showRecurrence = true;
 
@@ -226,6 +228,9 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 							}
 
 							startDate = moment(date);
+							var occurrenceDuration = duration;
+							var occurrenceDays = durationDays;
+							var occurrenceDateOnly = dateOnly;
 
 							// For each date that we"re checking, it"s possible that there is a recurrence override for that one day.
 							if ((curEvent.recurrences != undefined) && (curEvent.recurrences[dateKey] != undefined))
@@ -233,7 +238,10 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 								// We found an override, so for this recurrence, use a potentially different title, start date, and duration.
 								curEvent = curEvent.recurrences[dateKey];
 								startDate = moment(curEvent.start);
-								duration = parseInt(moment(curEvent.end).format("x")) - parseInt(startDate.format("x"));
+								occurrenceDateOnly = curEvent.start.dateOnly === true;
+								var overrideEnd = typeof curEvent.end !== "undefined" ? eventDate(curEvent, "end") : startDate.clone();
+								occurrenceDuration = overrideEnd.valueOf() - startDate.valueOf();
+								occurrenceDays = occurrenceDateOnly ? Math.max(1, overrideEnd.diff(startDate, "days")) : null;
 							}
 							// If there"s no recurrence override, check for an exception date.  Exception dates represent exceptions to the rule.
 							else if ((curEvent.exdate != undefined) && (curEvent.exdate[dateKey] != undefined))
@@ -242,7 +250,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 								showRecurrence = false;
 							}
 
-							endDate  = moment(parseInt(startDate.format("x")) + duration, "x");
+							endDate = occurrenceDateOnly ? startDate.clone().add(occurrenceDays, "days") : moment(startDate.valueOf() + occurrenceDuration);
 							if (startDate.format("x") == endDate.format("x")) {
 								endDate = endDate.endOf("day");
 							}
@@ -265,7 +273,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 									title: recurrenceTitle,
 									startDate: startDate.format("x"),
 									endDate: endDate.format("x"),
-									fullDayEvent: isFullDayEvent(event),
+									fullDayEvent: isFullDayEvent(curEvent),
 									class: event.class,
 									firstYear: event.start.getFullYear(),
 									location: location,
@@ -355,6 +363,9 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 	 * return bool - The event is a fullday event.
 	 */
 	var isFullDayEvent = function(event) {
+		if (event.start.dateOnly === true) {
+			return true;
+		}
 		if (event.start.length === 8) {
 			return true;
 		}

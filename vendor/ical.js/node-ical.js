@@ -24,8 +24,18 @@ ical.objectHandlers['RRULE'] = function(val, params, curr, stack, line){
   curr.rrule = line;
   return curr
 }
+var dateOnlyRule = require('./date-only-rule');
 var originalEnd = ical.objectHandlers['END'];
 ical.objectHandlers['END'] = function(val, params, curr, stack){
+  if (curr.rrule && curr.start && curr.start.dateOnly) {
+    try {
+      curr.rrule = dateOnlyRule(curr.rrule, curr.start);
+    } catch (err) {
+      console.log('Unrecognised DATE-only recurrence in calendar feed, ignoring: ' + curr.rrule);
+      curr.rrule = null;
+    }
+    return originalEnd.call(this, val, params, curr, stack);
+  }
   if (curr.rrule) {
     var rule = curr.rrule;
     if (rule.indexOf('DTSTART') === -1) {

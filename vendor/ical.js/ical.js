@@ -195,6 +195,11 @@
   //             EXDATE:20171219T060000
   //       Even though "T060000" doesn't match or overlap "T1400000Z", it's still supposed to be excluded?  Odd. :(
   // TODO: See if this causes any problems with events that recur multiple times a day.
+  // DATE values have calendar-date identities, independent of UTC offsets.
+  var dateKey = function (date) {
+    if (!date.dateOnly) return date.toISOString().substring(0, 10);
+    return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
+  }
   var exdateParam = function (name) {
     return function (val, params, curr) {
       var separatorPattern = /\s*,\s*/g;
@@ -207,7 +212,7 @@
           if (exdate[name])
           {
             if (typeof exdate[name].toISOString === 'function') {
-              curr[name][exdate[name].toISOString().substring(0, 10)] = exdate[name];
+              curr[name][dateKey(exdate[name])] = exdate[name];
             } else {
               console.error("No toISOString function in exdate[name]", exdate[name]);
             }
@@ -350,7 +355,7 @@
         		// We key by date only to avoid timezone and "floating time" problems (where the time isn't associated with a timezone).
 				// TODO: See if this causes a problem with events that have multiple recurrences per day.
                 if (typeof curr.recurrenceid.toISOString === 'function') {
-                  par[curr.uid].recurrences[curr.recurrenceid.toISOString().substring(0,10)] = recurrenceObj;
+                  par[curr.uid].recurrences[dateKey(curr.recurrenceid)] = recurrenceObj;
                 } else {
                   console.error("No toISOString function in curr.recurrenceid", curr.recurrenceid);
                 }
