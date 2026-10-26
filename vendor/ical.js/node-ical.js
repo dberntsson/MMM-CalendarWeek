@@ -17,8 +17,7 @@ exports.parseFile = function(filename){
 }
 
 
-var rrule = require('rrule-alt').RRule
-var rrulestr = rrule.rrulestr
+var timedRule = require('./timed-rule');
 
 ical.objectHandlers['RRULE'] = function(val, params, curr, stack, line){
   curr.rrule = line;
@@ -37,28 +36,10 @@ ical.objectHandlers['END'] = function(val, params, curr, stack){
     return originalEnd.call(this, val, params, curr, stack);
   }
   if (curr.rrule) {
-    var rule = curr.rrule;
-    if (rule.indexOf('DTSTART') === -1) {
-
-      if (curr.start.length === 8) {
-        var comps = /^(\d{4})(\d{2})(\d{2})$/.exec(curr.start);
-        if (comps) {
-         curr.start = new Date (comps[1], comps[2] - 1, comps[3]);
-        }
-      }
-
-      rule += ' DTSTART:' + curr.start.toISOString().replace(/[-:]/g, '');
-      rule = rule.replace(/\.[0-9]{3}/, '');
-    }
-    for (var i in curr.exdates) {
-      rule += ' EXDATE:' + curr.exdates[i].toISOString().replace(/[-:]/g, '');
-      rule = rule.replace(/\.[0-9]{3}/, '');
-    }
     try {
-      curr.rrule = rrulestr(rule);
-    }
-    catch(err) {
-      console.log("Unrecognised element in calendar feed, ignoring: " + rule);
+      curr.rrule = timedRule(curr.rrule, curr.start);
+    } catch (err) {
+      console.log('Unrecognised timed recurrence in calendar feed, ignoring: ' + curr.rrule);
       curr.rrule = null;
     }
   }

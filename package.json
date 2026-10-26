@@ -1,10 +1,10 @@
 {
     "dependencies": {
-        "valid-url": "^1.0.9",
+        "moment": "^2.29.4",
+        "moment-timezone": "^0.6.0",
         "request": "^2.88.2",
-        "rrule-alt": "^2.2.8",
         "rrule": "^2.8.1",
-        "moment": "^2.29.4"
+        "valid-url": "^1.0.9"
     },
     "scripts": {
         "test": "node --test test/*.test.js"

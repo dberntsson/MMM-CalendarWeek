@@ -82,10 +82,47 @@ function regressionCases() {
   assert.equal(single.length, 1);
   assert(single[0].fullDayEvent);
   assert.equal(date(single[0].endDate), '2026-10-26 00:00');
+  // A named timezone must be respected even when the Node host is UTC or New York.
+  const timedFields = 'DTSTART;TZID=Europe/Stockholm:20241029T100000\nDTEND;TZID=Europe/Stockholm:20241029T120000\nRRULE:FREQ=WEEKLY;WKST=MO;INTERVAL=2;BYDAY=TU';
+  const tzMoment = require('moment-timezone');
+  const stockholm = timestamp => tzMoment(+timestamp).tz('Europe/Stockholm').format('YYYY-MM-DD HH:mm Z');
+  const autumn = fetch(parse(event(timedFields)), '2026-10-12', 35);
+  assert.deepEqual(autumn.map(e => stockholm(e.startDate)), [
+    '2026-10-13 10:00 +02:00', '2026-10-27 10:00 +01:00', '2026-11-10 10:00 +01:00'
+  ]);
+  assert(autumn.every(e => !e.fullDayEvent && +e.endDate - +e.startDate === 7200000));
+  assert(autumn.every(e => stockholm(e.endDate).includes('12:00')));
+  const spring = fetch(parse(event(timedFields)), '2026-03-16', 35);
+  assert.deepEqual(spring.map(e => stockholm(e.startDate)), [
+    '2026-03-17 10:00 +01:00', '2026-03-31 10:00 +02:00', '2026-04-14 10:00 +02:00'
+  ]);
+  const excludedTimed = fetch(parse(event(timedFields + '\nEXDATE;TZID=Europe/Stockholm:20261027T100000')), '2026-10-25', 20);
+  assert.deepEqual(excludedTimed.map(e => stockholm(e.startDate)), ['2026-11-10 10:00 +01:00']);
+  const timedOverride = event('RECURRENCE-ID;TZID=Europe/Stockholm:20261027T100000\nDTSTART;TZID=Europe/Stockholm:20261028T150000\nDTEND;TZID=Europe/Stockholm:20261028T180000');
+  const overriddenTimed = fetch(parse(event(timedFields) + '\n' + timedOverride), '2026-10-25', 20);
+  assert.deepEqual(overriddenTimed.map(e => stockholm(e.startDate)), ['2026-10-28 15:00 +01:00', '2026-11-10 10:00 +01:00']);
+  assert.equal(+overriddenTimed[0].endDate - +overriddenTimed[0].startDate, 10800000);
+  assert.equal(+overriddenTimed[1].endDate - +overriddenTimed[1].startDate, 7200000);
+  // UTC recurrences preserve UTC time, rather than Stockholm wall time.
+  const utcEvents = fetch(parse(event('DTSTART:20261020T090000Z\nDTEND:20261020T100000Z\nRRULE:FREQ=WEEKLY;COUNT=2;BYDAY=TU')), '2026-10-19', 15);
+  assert.deepEqual(utcEvents.map(e => new Date(+e.startDate).toISOString()), ['2026-10-20T09:00:00.000Z', '2026-10-27T09:00:00.000Z']);
+  // Floating times follow host local time across both clock changes.
+  for (const first of ['20260327', '20261023', '20260306', '20261030']) {
+    const floating = fetch(parse(event('DTSTART:' + first + 'T100000\nDTEND:' + first + 'T110000\nRRULE:FREQ=DAILY;COUNT=6')), moment(first, 'YYYYMMDD').format('YYYY-MM-DD'), 8);
+    assert.equal(floating.length, 6);
+    floating.forEach(e => assert.equal(moment(+e.startDate).format('HH:mm'), '10:00'));
+  }
+  // UTC UNTIL is inclusive and must be converted to calendar coordinates.
+  const until = fetch(parse(event(timedFields.replace('INTERVAL=2;', 'INTERVAL=2;UNTIL=20261027T090000Z;'))), '2026-10-12', 35);
+  assert.deepEqual(until.map(e => stockholm(e.startDate)), ['2026-10-13 10:00 +02:00', '2026-10-27 10:00 +01:00']);
+  // Named-zone exception identities also work close to midnight (UTC day differs).
+  const midnight = fetch(parse(event('DTSTART;TZID=Europe/Stockholm:20261020T003000\nDTEND;TZID=Europe/Stockholm:20261020T013000\nRRULE:FREQ=WEEKLY;COUNT=3;BYDAY=TU\nEXDATE;TZID=Europe/Stockholm:20261027T003000')), '2026-10-19', 16);
+  assert.deepEqual(midnight.map(e => stockholm(e.startDate)), ['2026-10-20 00:30 +02:00', '2026-11-03 00:30 +01:00']);
+
 }
 
 for (const timezone of ['Europe/Stockholm', 'UTC', 'America/New_York']) {
-  test('date-only recurrence and fetcher regressions in ' + timezone, () => {
+  test('all-day and timed recurrence regressions in ' + timezone, () => {
     execFileSync(process.execPath, ['-e', '(' + regressionCases.toString() + ')()'], {
       cwd: path.join(__dirname, '..'), env: { ...process.env, TZ: timezone }, stdio: 'pipe'
     });

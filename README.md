@@ -110,3 +110,23 @@ config: {
 | `user`   | The username for HTTP authentication.                                                                                                                                                                                                                          |
 | `pass`   | The password for HTTP authentication. (If you use Bearer authentication, this should be your BearerToken.)                                                                                                                                                     |
 | `method` | Which authentication method should be used. HTTP Basic, Digest and Bearer authentication methods are supported. Basic authentication is used by default if this option is omitted. **Possible values:** `digest`, `basic`, `bearer` **Default value:** `basic` |
+
+
+### Timed recurrences and daylight saving
+
+Timed recurrences now use `rrule` with explicit wall-clock conversion. Events with
+an IANA `TZID`, such as `Europe/Stockholm`, retain their scheduled weekday and
+local time across DST changes even when Node runs in a different timezone.
+UTC (`Z`) events retain UTC time; floating events follow the host local timezone.
+`moment-timezone` resolves named-zone start/end dates, exclusions, and overrides.
+The legacy `rrule-alt` dependency is no longer used.
+
+Run `npm install` after updating and restart MagicMirror. `npm test` also covers
+fortnightly Tuesday events across both Stockholm DST transitions, timed exclusions
+and overrides, UTC and floating recurrences, and an inclusive UTC UNTIL boundary.
+Tests run in Stockholm, UTC, and New York without fetching calendar feeds.
+
+Timezone identifiers must be recognized IANA names. Arbitrary custom VTIMEZONE
+rules are not implemented. Ambiguous/nonexistent wall times at the clock-change
+hour follow Moment Timezone's default resolution; the regression fixtures use
+unambiguous times. Timed recurrence durations retain elapsed-time semantics.

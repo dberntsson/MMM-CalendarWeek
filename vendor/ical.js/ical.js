@@ -135,7 +135,7 @@
             parseInt(comps[5], 10),
             parseInt(comps[6], 10 )
           ));
-          // TODO add tz
+          // UTC date-time: retain the original representation for recurrence expansion.
         } else {
           newDate = new Date(
             parseInt(comps[1], 10),
@@ -148,6 +148,15 @@
         }
 
         newDate = addTZ(newDate, params);
+        newDate.icalValue = val;
+        if (!comps[7] && newDate.tz) {
+          var moment = require('moment-timezone');
+          if (!moment.tz.zone(newDate.tz)) throw new Error('Unsupported timezone: ' + newDate.tz);
+          var zone = newDate.tz;
+          newDate = moment.tz(val, 'YYYYMMDDTHHmmss', zone).toDate();
+          newDate.tz = zone;
+          newDate.icalValue = val;
+        }
     }
 
 
