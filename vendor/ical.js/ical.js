@@ -188,25 +188,10 @@
     }
   }
 
-  // EXDATE is an entry that represents exceptions to a recurrence rule (ex: "repeat every day except on 7/4").
-  // The EXDATE entry itself can also contain a comma-separated list, so we make sure to parse each date out separately.
-  // There can also be more than one EXDATE entries in a calendar record.
-  // Since there can be multiple dates, we create an array of them.  The index into the array is the ISO string of the date itself, for ease of use.
-  // i.e. You can check if ((curr.exdate != undefined) && (curr.exdate[date iso string] != undefined)) to see if a date is an exception.
-  // NOTE: This specifically uses date only, and not time.  This is to avoid a few problems:
-  //    1. The ISO string with time wouldn't work for "floating dates" (dates without timezones).
-  //       ex: "20171225T060000" - this is supposed to mean 6 AM in whatever timezone you're currently in
-  //    2. Daylight savings time potentially affects the time you would need to look up
-  //    3. Some EXDATE entries in the wild seem to have times different from the recurrence rule, but are still excluded by calendar programs.  Not sure how or why.
-  //       These would fail any sort of sane time lookup, because the time literally doesn't match the event.  So we'll ignore time and just use date.
-  //       ex: DTSTART:20170814T140000Z
-  //             RRULE:FREQ=WEEKLY;WKST=SU;INTERVAL=2;BYDAY=MO,TU
-  //             EXDATE:20171219T060000
-  //       Even though "T060000" doesn't match or overlap "T1400000Z", it's still supposed to be excluded?  Odd. :(
-  // TODO: See if this causes any problems with events that recur multiple times a day.
-  // DATE values have calendar-date identities, independent of UTC offsets.
-  var dateKey = function (date) {
-    if (!date.dateOnly) return date.toISOString().substring(0, 10);
+  // EXDATE and RECURRENCE-ID use the same identity as a generated occurrence.
+  // DATE values retain their calendar date. Timed values use the exact instant.
+  var occurrenceKey = function (date, dateOnly = date.dateOnly) {
+    if (!dateOnly) return date.toISOString();
     return date.getFullYear() + '-' + ('0' + (date.getMonth() + 1)).slice(-2) + '-' + ('0' + date.getDate()).slice(-2);
   }
   var exdateParam = function (name) {
@@ -221,7 +206,7 @@
           if (exdate[name])
           {
             if (typeof exdate[name].toISOString === 'function') {
-              curr[name][dateKey(exdate[name])] = exdate[name];
+              curr[name][occurrenceKey(exdate[name])] = exdate[name];
             } else {
               console.error("No toISOString function in exdate[name]", exdate[name]);
             }
@@ -267,7 +252,7 @@
   }
 
   return {
-
+    occurrenceKey: occurrenceKey,
 
     objectHandlers : {
       'BEGIN' : function(component, params, curr, stack){
@@ -360,11 +345,9 @@
         			par[curr.uid].recurrences = new Array();
             	}
 
-        		// Save off our cloned recurrence object into the array, keyed by date but not time.
-        		// We key by date only to avoid timezone and "floating time" problems (where the time isn't associated with a timezone).
-				// TODO: See if this causes a problem with events that have multiple recurrences per day.
+                // Match overrides by the original occurrence identity.
                 if (typeof curr.recurrenceid.toISOString === 'function') {
-                  par[curr.uid].recurrences[dateKey(curr.recurrenceid)] = recurrenceObj;
+                  par[curr.uid].recurrences[occurrenceKey(curr.recurrenceid)] = recurrenceObj;
                 } else {
                   console.error("No toISOString function in curr.recurrenceid", curr.recurrenceid);
                 }

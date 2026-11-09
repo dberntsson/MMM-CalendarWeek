@@ -24,7 +24,7 @@ function regressionCases() {
       static now() { return now; }
     }
     const context = {
-      require: name => name === 'moment' ? moment : { fromURL: (url, opts, callback) => callback(null, data) },
+      require: name => name === './recurrence' ? require('./recurrence') : name === 'moment' ? moment : { fromURL: (url, opts, callback) => callback(null, data) },
       module: { exports: {} }, process, global: { version: 'test' }, Date: Clock,
       console, setTimeout: () => 0, clearTimeout: () => {}
     };
@@ -118,6 +118,30 @@ function regressionCases() {
   // Named-zone exception identities also work close to midnight (UTC day differs).
   const midnight = fetch(parse(event('DTSTART;TZID=Europe/Stockholm:20261020T003000\nDTEND;TZID=Europe/Stockholm:20261020T013000\nRRULE:FREQ=WEEKLY;COUNT=3;BYDAY=TU\nEXDATE;TZID=Europe/Stockholm:20261027T003000')), '2026-10-19', 16);
   assert.deepEqual(midnight.map(e => stockholm(e.startDate)), ['2026-10-20 00:30 +02:00', '2026-11-03 00:30 +01:00']);
+
+  const ongoing = parse(event('DTSTART;VALUE=DATE:20261102\nDTEND;VALUE=DATE:20261105\nRRULE:FREQ=WEEKLY;COUNT=2'));
+  const active = fetch(ongoing, '2026-11-03', 3);
+  assert.deepEqual(active.map(e => [date(e.startDate), date(e.endDate)]), [
+    ['2026-11-02 00:00', '2026-11-05 00:00']
+  ]);
+  assert.equal(fetch(ongoing, '2026-11-05', 4).length, 0);
+  const fallOverlap = parse(event('DTSTART;VALUE=DATE:20261024\nDTEND;VALUE=DATE:20261027\nRRULE:FREQ=WEEKLY;COUNT=1'));
+  assert.deepEqual(fetch(fallOverlap, '2026-10-26', 1).map(e => [date(e.startDate), date(e.endDate)]), [
+    ['2026-10-24 00:00', '2026-10-27 00:00']
+  ]);
+
+  const overnight = parse(event('DTSTART:20261102T230000\nDTEND:20261103T020000\nRRULE:FREQ=WEEKLY;COUNT=2'));
+  assert.deepEqual(fetch(overnight, '2026-11-03', 1).map(e => [date(e.startDate), date(e.endDate)]), [
+    ['2026-11-02 23:00', '2026-11-03 02:00']
+  ]);
+
+  // Two exclusions and a moved occurrence share a UTC date with an unchanged
+  // occurrence. Each exception must match only its original timestamp.
+  const sameDate = event('DTSTART:20261102T090000Z\nDTEND:20261102T093000Z\nRRULE:FREQ=DAILY;BYHOUR=9,11,13,15;COUNT=4\nEXDATE:20261102T090000Z,20261102T130000Z');
+  const movedTimed = event('RECURRENCE-ID:20261102T110000Z\nDTSTART:20261102T120000Z\nDTEND:20261102T123000Z');
+  assert.deepEqual(fetch(parse(sameDate + '\n' + movedTimed), '2026-11-02', 2).map(e => new Date(+e.startDate).toISOString()), [
+    '2026-11-02T12:00:00.000Z', '2026-11-02T15:00:00.000Z'
+  ]);
 
 }
 

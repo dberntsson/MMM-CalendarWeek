@@ -7,6 +7,7 @@
 
 var ical = require("./vendor/ical.js");
 var moment = require("moment");
+var expandOccurrences = require("./recurrence");
 
 var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth, includePastEvents) {
 	var self = this;
@@ -66,9 +67,6 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 			// console.log(data);
 			newEvents = [];
 
-			// limitFunction doesn't do much limiting, see comment re: the dates array in rrule section below as to why we need to do the filtering ourselves
-			var limitFunction = function(date, i) {return true;};
-
 			var eventDate = function(event, time) {
 				return (event[time].length === 8) ? moment(event[time], "YYYYMMDD") : moment(new Date(event[time]));
 			};
@@ -77,7 +75,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 				var event = data[e];
 				var now = new Date();
 				var today = moment().startOf("day").toDate();
-				var future = moment().startOf("day").add(maximumNumberOfDays, "days").subtract(1,"seconds").toDate(); // Subtract 1 second so that events that start on the middle of the night will not repeat.
+				var future = moment().startOf("day").add(maximumNumberOfDays, "days").toDate();
 				var past = today;
 
 				if (includePastEvents) {
@@ -110,11 +108,6 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 							endDate = moment(startDate).add(1, "days");
 						}
 					}
-
-					// calculate the duration f the event for use with recurring events.
-					var duration = parseInt(endDate.format("x")) - parseInt(startDate.format("x"));
-					var dateOnly = event.start.dateOnly === true;
-					var durationDays = dateOnly ? Math.max(1, endDate.diff(startDate, "days")) : null;
 
 					if (event.start.length === 8) {
 						startDate = startDate.startOf("day");
@@ -177,115 +170,20 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 					var description = event.description || false;
 
 					if (typeof event.rrule !== "undefined" && event.rrule !== null && !isFacebookBirthday) {
-						var rule = event.rrule;
-						var addedEvents = 0;
-
-						// can cause problems with e.g. birthdays before 1900
-						if(rule.options && rule.origOptions && rule.origOptions.dtstart && rule.origOptions.dtstart.getFullYear() < 1900 ||
-							rule.options && rule.options.dtstart && rule.options.dtstart.getFullYear() < 1900){
-							rule.origOptions.dtstart.setYear(1900);
-							rule.options.dtstart.setYear(1900);
+						for (var occurrence of expandOccurrences(event, startDate, endDate, past, future)) {
+							if (timeFilterApplies(now, occurrence.end, dateFilter)) continue;
+							newEvents.push({
+								title: getTitleFromEvent(occurrence.event),
+								startDate: occurrence.start.format("x"),
+								endDate: occurrence.end.format("x"),
+								fullDayEvent: isFullDayEvent(occurrence.event),
+								class: event.class,
+								firstYear: event.start.getFullYear(),
+								location: location,
+								geo: geo,
+								description: description
+							});
 						}
-
-						// For recurring events, get the set of start dates that fall within the range
-						// of dates we"re looking for.
-						var dates = rule.between(past, future, true, limitFunction);
-
-						// The "dates" array contains the set of dates within our desired date range range that are valid
-						// for the recurrence rule.  *However*, it"s possible for us to have a specific recurrence that
-						// had its date changed from outside the range to inside the range.  For the time being,
-						// we"ll handle this by adding *all* recurrence entries into the set of dates that we check,
-						// because the logic below will filter out any recurrences that don"t actually belong within
-						// our display range.
-						// Would be great if there was a better way to handle this.
-						if (event.recurrences != undefined)
-						{
-							var pastMoment = moment(past);
-							var futureMoment = moment(future);
-
-							for (var r in event.recurrences)
-							{
-								// Only add dates that weren't already in the range we added from the rrule so that
-								// we don"t double-add those events.
-								if (!(dateOnly ? moment(r, "YYYY-MM-DD") : moment(new Date(r))).isBetween(pastMoment, futureMoment, undefined, "[]"))
-								{
-									dates.push(dateOnly ? moment(r, "YYYY-MM-DD").toDate() : new Date(r));
-								}
-							}
-						}
-
-						// Loop through the set of date entries to see which recurrences should be added to our event list.
-						for (var d in dates) {
-							var date = dates[d];
-							// ical.js started returning recurrences and exdates as ISOStrings without time information.
-							// .toISOString().substring(0,10) is the method they use to calculate keys, so we'll do the same
-							// (see https://github.com/peterbraden/ical.js/pull/84 )
-							var dateKey = dateOnly ? moment(date).format("YYYY-MM-DD") : date.toISOString().substring(0,10);
-							var curEvent = event;
-							var showRecurrence = true;
-
-							// Stop parsing this event's recurrences if we've already found maximumEntries worth of recurrences.
-							// (The logic below would still filter the extras, but the check is simple since we're already tracking the count)
-							if (addedEvents >= maximumEntries) {
-								break;
-							}
-
-							startDate = moment(date);
-							var occurrenceDuration = duration;
-							var occurrenceDays = durationDays;
-							var occurrenceDateOnly = dateOnly;
-
-							// For each date that we"re checking, it"s possible that there is a recurrence override for that one day.
-							if ((curEvent.recurrences != undefined) && (curEvent.recurrences[dateKey] != undefined))
-							{
-								// We found an override, so for this recurrence, use a potentially different title, start date, and duration.
-								curEvent = curEvent.recurrences[dateKey];
-								startDate = moment(curEvent.start);
-								occurrenceDateOnly = curEvent.start.dateOnly === true;
-								var overrideEnd = typeof curEvent.end !== "undefined" ? eventDate(curEvent, "end") : startDate.clone();
-								occurrenceDuration = overrideEnd.valueOf() - startDate.valueOf();
-								occurrenceDays = occurrenceDateOnly ? Math.max(1, overrideEnd.diff(startDate, "days")) : null;
-							}
-							// If there"s no recurrence override, check for an exception date.  Exception dates represent exceptions to the rule.
-							else if ((curEvent.exdate != undefined) && (curEvent.exdate[dateKey] != undefined))
-							{
-								// This date is an exception date, which means we should skip it in the recurrence pattern.
-								showRecurrence = false;
-							}
-
-							endDate = occurrenceDateOnly ? startDate.clone().add(occurrenceDays, "days") : moment(startDate.valueOf() + occurrenceDuration);
-							if (startDate.format("x") == endDate.format("x")) {
-								endDate = endDate.endOf("day");
-							}
-
-							var recurrenceTitle = getTitleFromEvent(curEvent);
-
-							// If this recurrence ends before the start of the date range, or starts after the end of the date range, don"t add
-							// it to the event list.
-							if (endDate.isBefore(past) || startDate.isAfter(future)) {
-								showRecurrence = false;
-							}
-
-							if (timeFilterApplies(now, endDate, dateFilter)) {
-								showRecurrence = false;
-							}
-
-							if ((showRecurrence === true) && (addedEvents < maximumEntries)) {
-								addedEvents++;
-								newEvents.push({
-									title: recurrenceTitle,
-									startDate: startDate.format("x"),
-									endDate: endDate.format("x"),
-									fullDayEvent: isFullDayEvent(curEvent),
-									class: event.class,
-									firstYear: event.start.getFullYear(),
-									location: location,
-									geo: geo,
-									description: description
-								});
-							}
-						}
-						// end recurring event parsing
 					} else {
 						// console.log("Single event ...");
 						// Single event.
@@ -308,7 +206,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 							}
 						}
 
-						if (startDate > future) {
+						if (startDate >= future) {
 							//console.log("It exceeds the maximumNumberOfDays limit. So skip: " + title);
 							continue;
 						}

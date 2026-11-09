@@ -396,13 +396,13 @@ vows.describe('node-ical').addBatch({
       }
       , "Has two EXDATES": function (topic) {
       	assert.notEqual(topic.exdate, undefined);
-      	assert.notEqual(topic.exdate[new Date(2015, 06, 08, 12, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.notEqual(topic.exdate[new Date(2015, 06, 10, 12, 0, 0).toISOString().substring(0, 10)], undefined);
+        assert.notEqual(topic.exdate['2015-07-08T19:00:00.000Z'], undefined);
+        assert.notEqual(topic.exdate['2015-07-10T19:00:00.000Z'], undefined);
       }
       , "Has a RECURRENCE-ID override": function (topic) {
       	assert.notEqual(topic.recurrences, undefined);
-      	assert.notEqual(topic.recurrences[new Date(2015, 06, 07, 12, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.equal(topic.recurrences[new Date(2015, 06, 07, 12, 0, 0).toISOString().substring(0, 10)].summary, 'More Treasure Hunting');
+        assert.notEqual(topic.recurrences['2015-07-07T19:00:00.000Z'], undefined);
+        assert.equal(topic.recurrences['2015-07-07T19:00:00.000Z'].summary, 'More Treasure Hunting');
       }
     }
   }
@@ -425,8 +425,8 @@ vows.describe('node-ical').addBatch({
       }
       , "Has a RECURRENCE-ID override": function (topic) {
       	assert.notEqual(topic.recurrences, undefined);
-      	assert.notEqual(topic.recurrences[new Date(2016, 7, 26, 14, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.equal(topic.recurrences[new Date(2016, 7, 26, 14, 0, 0).toISOString().substring(0, 10)].summary, 'bla bla');
+        assert.notEqual(topic.recurrences['2016-08-26T11:00:00.000Z'], undefined);
+        assert.equal(topic.recurrences['2016-08-26T11:00:00.000Z'].summary, 'bla bla');
       }
     }
   }
@@ -447,12 +447,12 @@ vows.describe('node-ical').addBatch({
       , "Has four comma-separated EXDATES": function (topic) {
       	assert.notEqual(topic.exdate, undefined);
 		// Verify the four comma-separated EXDATES are there
-      	assert.notEqual(topic.exdate[new Date(2017, 6, 6, 12, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.notEqual(topic.exdate[new Date(2017, 6, 17, 12, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.notEqual(topic.exdate[new Date(2017, 6, 20, 12, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.notEqual(topic.exdate[new Date(2017, 7, 3, 12, 0, 0).toISOString().substring(0, 10)], undefined);
+        assert.notEqual(topic.exdate['2017-07-06T14:00:00.000Z'], undefined);
+        assert.notEqual(topic.exdate['2017-07-17T14:00:00.000Z'], undefined);
+        assert.notEqual(topic.exdate['2017-07-20T14:00:00.000Z'], undefined);
+        assert.notEqual(topic.exdate['2017-08-03T14:00:00.000Z'], undefined);
 		// Verify an arbitrary date isn't there
-      	assert.equal(topic.exdate[new Date(2017, 4, 5, 12, 0, 0).toISOString().substring(0, 10)], undefined);
+        assert.equal(topic.exdate['2017-05-05T14:00:00.000Z'], undefined);
       }
     }
   }
@@ -473,8 +473,8 @@ vows.describe('node-ical').addBatch({
       , "Has two EXDATES even though they have bad times": function (topic) {
       	assert.notEqual(topic.exdate, undefined);
       	// Verify the two EXDATES are there, even though they have bad times
-      	assert.notEqual(topic.exdate[new Date(2017, 11, 18, 12, 0, 0).toISOString().substring(0, 10)], undefined);
-      	assert.notEqual(topic.exdate[new Date(2017, 11, 19, 12, 0, 0).toISOString().substring(0, 10)], undefined);
+        assert.notEqual(topic.exdate[new Date(2017, 11, 18, 6, 0, 0).toISOString()], undefined);
+        assert.notEqual(topic.exdate[new Date(2017, 11, 19, 6, 0, 0).toISOString()], undefined);
       }
     }
   }
