@@ -65,7 +65,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 			}
 
 			// console.log(data);
-			newEvents = [];
+			const newEvents = [];
 
 			var eventDate = function(event, time) {
 				return (event[time].length === 8) ? moment(event[time], "YYYYMMDD") : moment(new Date(event[time]));
@@ -99,7 +99,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 					if (typeof event.end !== "undefined") {
 						endDate = eventDate(event, "end");
 					} else if(typeof event.duration !== "undefined") {
-						dur=moment.duration(event.duration);
+						const dur = moment.duration(event.duration);
 						endDate = startDate.clone().add(dur);
 					} else {
 						if (!isFacebookBirthday) {

@@ -6,9 +6,13 @@
         "valid-url": "^1.0.9"
     },
     "scripts": {
-        "test": "node --test test/*.test.js"
+        "test": "node --test test/*.test.js",
+        "lint": "eslint ."
     },
     "engines": {
         "node": ">=18"
+    },
+    "devDependencies": {
+        "eslint": "^10.14.0"
     }
 }

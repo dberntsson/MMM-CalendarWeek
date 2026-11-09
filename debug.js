@@ -23,7 +23,7 @@ var auth = {
 
 console.log("Create fetcher ...");
 
-fetcher = new CalendarFetcher(url, fetchInterval, maximumEntries, maximumNumberOfDays, auth);
+const fetcher = new CalendarFetcher(url, fetchInterval, maximumEntries, maximumNumberOfDays, auth);
 
 fetcher.onReceive(function(fetcher) {
 	console.log(fetcher.events());

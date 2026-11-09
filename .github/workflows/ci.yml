@@ -20,5 +20,10 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - run: npm ci
+      - if: matrix.node-version == 18
+        run: npm ci --omit=dev
+      - if: matrix.node-version == 24
+        run: npm ci
+      - if: matrix.node-version == 24
+        run: npm run lint
       - run: npm test
