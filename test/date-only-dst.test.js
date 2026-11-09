@@ -77,6 +77,24 @@ function regressionCases() {
   const timed = fetch(parse(event('DTSTART:20261102T100000\nDTEND:20261102T110000\nRRULE:FREQ=DAILY;COUNT=2')), '2026-11-02', 3);
   assert.deepEqual(timed.map(e => date(e.startDate)), ['2026-11-02 10:00', '2026-11-03 10:00']);
   assert(timed.every(e => +e.endDate - +e.startDate === 3600000 && !e.fullDayEvent));
+  const reminderStart = 'DTSTART:20261102T100000';
+  const reminder = fetch(parse(event(reminderStart + '\nRRULE:FREQ=DAILY;COUNT=2')), '2026-11-01', 3);
+  const oneOffReminder = fetch(parse(event(reminderStart)), '2026-11-01', 3);
+  assert.deepEqual(reminder.map(e => date(e.startDate)), ['2026-11-02 10:00', '2026-11-03 10:00']);
+  assert(reminder.every(e => e.startDate === e.endDate && !e.fullDayEvent));
+  assert.equal(reminder[0].endDate, oneOffReminder[0].endDate);
+
+  const midnightReminders = fetch(parse(event('DTSTART:20261102T000000\nRRULE:FREQ=DAILY;COUNT=2')), '2026-11-02', 1);
+  assert.deepEqual(midnightReminders.map(e => [date(e.startDate), date(e.endDate)]), [
+    ['2026-11-02 00:00', '2026-11-02 00:00']
+  ]);
+
+  const movedReminder = event('RECURRENCE-ID:20261102T100000\nDTSTART:20261102T110000');
+  const movedReminders = fetch(parse(event(reminderStart + '\nRRULE:FREQ=DAILY;COUNT=2') + '\n' + movedReminder), '2026-11-01', 3);
+  assert.deepEqual(movedReminders.map(e => [date(e.startDate), date(e.endDate)]), [
+    ['2026-11-02 11:00', '2026-11-02 11:00'],
+    ['2026-11-03 10:00', '2026-11-03 10:00']
+  ]);
   // Nonrecurring DATE-only events are still classified as all-day.
   const single = fetch(parse(event('DTSTART;VALUE=DATE:20261025\nDTEND;VALUE=DATE:20261026')), '2026-10-25', 2);
   assert.equal(single.length, 1);

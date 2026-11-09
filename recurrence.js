@@ -1,10 +1,6 @@
 const moment = require('moment');
 const { occurrenceKey } = require('./vendor/ical.js/ical');
 
-function occurrence(event, start, end) {
-  return { event, start, end: start.isSame(end) ? end.endOf('day') : end };
-}
-
 // Query far enough back to find ongoing events, then enforce the half-open
 // display window using the actual start and end of each occurrence.
 module.exports = function expandOccurrences(event, start, end, windowStart, windowEnd) {
@@ -20,7 +16,7 @@ module.exports = function expandOccurrences(event, start, end, windowStart, wind
     const key = occurrenceKey(date, dateOnly);
     if (overrides[key] || exclusions[key]) continue;
     const from = moment(date);
-    occurrences.push(occurrence(event, from, from.clone().add(duration, unit)));
+    occurrences.push({ event, start: from, end: from.clone().add(duration, unit) });
   }
 
   // An override's actual dates can overlap the window even if its original
@@ -29,11 +25,15 @@ module.exports = function expandOccurrences(event, start, end, windowStart, wind
     const from = moment(override.start);
     const to = override.end ? moment(override.end) : from.clone().add(moment.duration(override.duration || 0));
     if (override.start.dateOnly && to.diff(from, 'days') < 1) {
-      occurrences.push(occurrence(override, from, from.clone().add(1, 'day')));
+      occurrences.push({ event: override, start: from, end: from.clone().add(1, 'day') });
     } else {
-      occurrences.push(occurrence(override, from, to));
+      occurrences.push({ event: override, start: from, end: to });
     }
   }
 
-  return occurrences.filter(item => item.start < windowEnd && item.end > windowStart);
+  return occurrences.filter(({ start, end }) => {
+    // A zero-duration reminder belongs to the window containing its start.
+    if (start.isSame(end)) return start >= windowStart && start < windowEnd;
+    return start < windowEnd && end > windowStart;
+  });
 };
