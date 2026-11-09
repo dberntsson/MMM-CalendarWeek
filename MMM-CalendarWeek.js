@@ -347,7 +347,7 @@ Module.register("MMM-CalendarWeek", {
 					}
 				}
 
-				titleWrapper.innerHTML = this.titleTransform(event.title) + repeatingCountTitle;
+				this.appendTextLines(titleWrapper, this.titleTransform(event.title) + repeatingCountTitle);
 
 				if (!this.config.colored) {
 					titleWrapper.className = "title bright";
@@ -381,10 +381,11 @@ Module.register("MMM-CalendarWeek", {
 							break;
 						}
 						}
-						timeWrapper.innerHTML = moment(event.startDate, "x").format(timeFormatString);
+						timeWrapper.textContent = moment(event.startDate, "x").format(timeFormatString);
 
 						if (this.config.showEndDate) {
-							timeWrapper.innerHTML = timeWrapper.innerHTML + "</br>" + moment(event.endDate, "x").format(timeFormatString);
+							timeWrapper.appendChild(document.createElement("br"));
+							timeWrapper.appendChild(document.createTextNode(moment(event.endDate, "x").format(timeFormatString)));
 						}
 
 						eventWrapper.appendChild(timeWrapper);
@@ -500,7 +501,7 @@ Module.register("MMM-CalendarWeek", {
 
 					var locationString = document.createElement("td");
 					locationString.className = "align-left";
-					locationString.innerHTML = event.location;
+					locationString.textContent = event.location;
 					locationWrapper.appendChild(locationString);
 
 
@@ -525,7 +526,7 @@ Module.register("MMM-CalendarWeek", {
 
 					var descriptionString = document.createElement("td");
 					descriptionString.className = "align-left";
-					descriptionString.innerHTML = event.description;
+					this.appendTextLines(descriptionString, event.description);
 					descriptionWrapper.appendChild(descriptionString);
 
 
@@ -735,33 +736,34 @@ Module.register("MMM-CalendarWeek", {
 			return "";
 		}
 
+		var title = string.trim();
 		if (wrapEvents === true) {
-			var temp = "";
-			var currentLine = "";
-			var words = string.split(" ");
-
-			for (var i = 0; i < words.length; i++) {
-				var word = words[i];
-				if (currentLine.length + word.length < (typeof maxLength === "number" ? maxLength : 25) - 1) { // max - 1 to account for a space
-					currentLine += (word + " ");
-				} else {
-					if (currentLine.length > 0) {
-						temp += (currentLine + "<br>" + word + " ");
-					} else {
-						temp += (word + "<br>");
+			var limit = typeof maxLength === "number" ? maxLength : 25;
+			return title.split(/\r?\n/).map(function (line) {
+				var lines = [];
+				var currentLine = "";
+				for (var word of line.trim().split(/\s+/)) {
+					if (currentLine && currentLine.length + word.length + 1 > limit) {
+						lines.push(currentLine);
+						currentLine = "";
 					}
-					currentLine = "";
+					currentLine += (currentLine ? " " : "") + word;
 				}
-			}
-
-			return (temp + currentLine).trim();
-		} else {
-			if (maxLength && typeof maxLength === "number" && string.length > maxLength) {
-				return string.trim().slice(0, maxLength) + "&hellip;";
-			} else {
-				return string.trim();
-			}
+				lines.push(currentLine);
+				return lines.join("\n");
+			}).join("\n");
 		}
+		if (typeof maxLength === "number" && maxLength && title.length > maxLength) {
+			return title.slice(0, maxLength) + "…";
+		}
+		return title;
+	},
+
+	appendTextLines: function (element, text) {
+		String(text).split(/\r\n|\r|\n/).forEach(function (line, index) {
+			if (index > 0) element.appendChild(document.createElement("br"));
+			element.appendChild(document.createTextNode(line));
+		});
 	},
 
 	/* isMultiDayEvent(event)
@@ -795,6 +797,8 @@ Module.register("MMM-CalendarWeek", {
 	 * return string - The transformed title.
 	 */
 	titleTransform: function (title) {
+		if (typeof title !== "string") return "";
+
 		for (var needle in this.config.titleReplace) {
 			var replacement = this.config.titleReplace[needle];
 
