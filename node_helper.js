@@ -9,70 +9,60 @@ var NodeHelper = require("node_helper");
 var validUrl = require("valid-url");
 var CalendarFetcher = require("./calendarfetcher.js");
 
+// Use only settings consumed by CalendarFetcher. Filter order is significant.
+function fetcherKey({ url, fetchInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth }) {
+	const filters = (excludedEvents || []).map(filter => {
+		if (!filter || typeof filter !== "object") return filter;
+		return [filter.filterBy, filter.until, Boolean(filter.regex), Boolean(filter.caseSensitive)];
+	});
+	const credentials = !auth ? null : auth.method === "bearer"
+		? ["bearer", auth.pass]
+		: [auth.method === "digest" ? "digest" : "basic", auth.user, auth.pass];
+	return JSON.stringify([url, fetchInterval, filters, maximumEntries, maximumNumberOfDays, credentials]);
+}
+
 module.exports = NodeHelper.create({
-	// Override start method.
 	start: function() {
-		var events = [];
-
-		this.fetchers = [];
-
+		this.fetchers = new Map();
 		console.log("Starting node helper for: " + this.name);
-
 	},
 
-	// Override socketNotificationReceived method.
 	socketNotificationReceived: function(notification, payload) {
-		if (notification === "ADD_CALENDAR") {
-			//console.log('ADD_CALENDAR: ');
-			this.createFetcher(payload.url, payload.fetchInterval, payload.excludedEvents, payload.maximumEntries, payload.maximumNumberOfDays, payload.auth);
-		}
+		if (notification === "ADD_CALENDAR") this.createFetcher(payload);
 	},
 
-	/* createFetcher(url, reloadInterval)
-	 * Creates a fetcher for a new url if it doesn't exist yet.
-	 * Otherwise it reuses the existing one.
-	 *
-	 * attribute url string - URL of the news feed.
-	 * attribute reloadInterval number - Reload interval in milliseconds.
-	 */
-
-	createFetcher: function(url, fetchInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth) {
-		var self = this;
-
+	createFetcher: function(settings) {
+		const { identifier, url, fetchInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth } = settings;
 		if (!validUrl.isUri(url)) {
-			self.sendSocketNotification("INCORRECT_URL", {url: url});
+			this.sendSocketNotification("INCORRECT_URL", { identifier, url });
 			return;
 		}
 
-		var fetcher;
-		if (typeof self.fetchers[url] === "undefined") {
-			console.log("Create new calendar fetcher, interval: " + fetchInterval);
-			fetcher = new CalendarFetcher(url, fetchInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth);
-
-			fetcher.onReceive(function(fetcher) {
-				//console.log('Broadcast events.');
-				//console.log(fetcher.events());
-
-				self.sendSocketNotification("CALENDAR_EVENTS", {
-					url: fetcher.url(),
-					events: fetcher.events()
-				});
-			});
-
-			fetcher.onError(function(fetcher, error) {
-				self.sendSocketNotification("FETCH_ERROR", {
-					url: fetcher.url(),
-					error: error.message
-				});
-			});
-
-			self.fetchers[url] = fetcher;
-		} else {
-			//console.log('Use existing news fetcher for url: ' + url);
-			fetcher = self.fetchers[url];
-			fetcher.broadcastEvents();
+		const key = fetcherKey(settings);
+		const existing = this.fetchers.get(key);
+		if (existing) {
+			existing.subscribers.add(identifier);
+			if (existing.events !== undefined) {
+				this.sendSocketNotification("CALENDAR_EVENTS", { identifier, url, events: existing.events });
+			}
+			return;
 		}
 
+		const entry = { subscribers: new Set([identifier]), events: undefined };
+		this.fetchers.set(key, entry);
+		const fetcher = new CalendarFetcher(url, fetchInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth);
+
+		fetcher.onReceive(sender => {
+			entry.events = sender.events();
+			for (const subscriber of entry.subscribers) {
+				this.sendSocketNotification("CALENDAR_EVENTS", { identifier: subscriber, url, events: entry.events });
+			}
+		});
+		fetcher.onError((sender, error) => {
+			for (const subscriber of entry.subscribers) {
+				this.sendSocketNotification("FETCH_ERROR", { identifier: subscriber, url, error: error.message });
+			}
+		});
 		fetcher.startFetch();
 	}
 });

@@ -84,6 +84,9 @@ Module.register("MMM-CalendarWeek", {
 		// Set locale.
 		moment.updateLocale(config.language, this.getLocaleSpecification(config.timeFormat));
 
+		this.calendarData = {};
+		this.loaded = false;
+
 		for (var c in this.config.calendars) {
 			var calendar = this.config.calendars[c];
 			calendar.url = calendar.url.replace("webcal://", "http://");
@@ -106,13 +109,11 @@ Module.register("MMM-CalendarWeek", {
 
 			this.addCalendar(calendar.url, calendar.auth, calendarConfig);
 		}
-
-		this.calendarData = {};
-		this.loaded = false;
 	},
 
 	// Override socket notification handler.
 	socketNotificationReceived: function (notification, payload) {
+		if (!payload || payload.identifier !== this.identifier) return;
 		if (notification === "CALENDAR_EVENTS") {
 			if (this.hasCalendarURL(payload.url)) {
 				this.calendarData[payload.url] = payload.events;
@@ -586,6 +587,7 @@ Module.register("MMM-CalendarWeek", {
 	 */
 	addCalendar: function (url, auth, calendarConfig) {
 		this.sendSocketNotification("ADD_CALENDAR", {
+			identifier: this.identifier,
 			url: url,
 			excludedEvents: calendarConfig.excludedEvents || this.config.excludedEvents,
 			maximumEntries: calendarConfig.maximumEntries || this.config.maximumEntries,
