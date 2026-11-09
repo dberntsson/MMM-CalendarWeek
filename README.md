@@ -111,22 +111,15 @@ config: {
 | `pass`   | The password for HTTP authentication. (If you use Bearer authentication, this should be your BearerToken.)                                                                                                                                                     |
 | `method` | Which authentication method should be used. HTTP Basic, Digest and Bearer authentication methods are supported. Basic authentication is used by default if this option is omitted. **Possible values:** `digest`, `basic`, `bearer` **Default value:** `basic` |
 
+### Calendar downloads
 
-### Timed recurrences and daylight saving
+The downloader requires Node.js 18 or later and supports the existing Basic,
+Bearer, and Digest settings. Digest supports legacy MD5 and MD5-sess as well
+as SHA-256 and SHA-512-256 variants, with `qop=auth` or without a qop.
 
-Timed recurrences now use `rrule` with explicit wall-clock conversion. Events with
-an IANA `TZID`, such as `Europe/Stockholm`, retain their scheduled weekday and
-local time across DST changes even when Node runs in a different timezone.
-UTC (`Z`) events retain UTC time; floating events follow the host local timezone.
-`moment-timezone` resolves named-zone start/end dates, exclusions, and overrides.
-The legacy `rrule-alt` dependency is no longer used.
-
-Run `npm install` after updating and restart MagicMirror. `npm test` also covers
-fortnightly Tuesday events across both Stockholm DST transitions, timed exclusions
-and overrides, UTC and floating recurrences, and an inclusive UTC UNTIL boundary.
-Tests run in Stockholm, UTC, and New York without fetching calendar feeds.
-
-Timezone identifiers must be recognized IANA names. Arbitrary custom VTIMEZONE
-rules are not implemented. Ambiguous/nonexistent wall times at the clock-change
-hour follow Moment Timezone's default resolution; the regression fixtures use
-unambiguous times. Timed recurrence durations retain elapsed-time semantics.
+Each download attempt has a 10-second deadline covering redirects,
+authentication, and the response body. Network failures, timeouts, HTTP 408,
+429, 500, 502, 503, and 504 get at most one immediate retry. A server asking
+for more than two seconds via `Retry-After` waits for the normal refresh cycle.
+Authentication and parsing failures surface through the existing fetch-error
+notification. Credentials are stripped when a redirect changes origin.

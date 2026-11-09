@@ -12,6 +12,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 	var self = this;
 
 	var reloadTimer = null;
+	var fetching = false;
 	var events = [];
 
 	var fetchFailedCallback = function() {};
@@ -22,15 +23,16 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 	 */
 	var fetchCalendar = function() {
 
+		if (fetching) return;
+		fetching = true;
 		clearTimeout(reloadTimer);
 		reloadTimer = null;
 
-		nodeVersion = Number(process.version.match(/^v(\d+\.\d+)/)[1]);
+		var nodeVersion = Number(process.version.match(/^v(\d+\.\d+)/)[1]);
 		var opts = {
 			headers: {
 				"User-Agent": "Mozilla/5.0 (Node.js "+ nodeVersion + ") MagicMirror/"  + global.version +  " (https://github.com/MichMich/MagicMirror/)"
-			},
-			gzip: true
+			}
 		};
 
 		if (auth) {
@@ -54,6 +56,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 		}
 
 		ical.fromURL(url, opts, function(err, data) {
+			fetching = false;
 			if (err) {
 				fetchFailedCallback(self, err);
 				scheduleTimer();

@@ -123,7 +123,9 @@ Module.register("MMM-CalendarWeek", {
 				}
 			}
 		} else if (notification === "FETCH_ERROR") {
-			Log.error("Calendar Error. Could not fetch calendar: " + payload.url);
+			if (this.hasCalendarURL(payload.url)) {
+				Log.error("Calendar error: " + payload.error);
+			}
 		} else if (notification === "INCORRECT_URL") {
 			Log.error("Calendar Error. Incorrect url: " + payload.url);
 		} else {

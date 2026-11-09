@@ -1,15 +1,21 @@
 var ical = require('./ical')
-  , request = require('request')
+  , downloadCalendar = require('./download-calendar')
   , fs = require('fs')
 
 exports.fromURL = function(url, opts, cb){
   if (!cb)
     return;
-  request(url, opts, function(err, r, data){
-    if (err)
-      return cb(err, null);
-    cb(undefined, ical.parseICS(data));
-  })
+  downloadCalendar(url, opts).then(data => {
+    const body = data.trim();
+    if (!/^BEGIN:VCALENDAR\r?\n/i.test(body) || !/\r?\nEND:VCALENDAR$/i.test(body)) {
+      throw new Error('Calendar response is not a complete iCalendar document');
+    }
+    try {
+      return ical.parseICS(body);
+    } catch (error) {
+      throw new Error('Unable to parse the iCalendar response', { cause: error });
+    }
+  }).then(data => cb(null, data), error => cb(error, null));
 }
 
 exports.parseFile = function(filename){
