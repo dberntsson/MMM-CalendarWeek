@@ -13,17 +13,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        node-version: [18, 24]
+        node-version: ["22.22.2", "24"]
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ matrix.node-version }}
           cache: npm
-      - if: matrix.node-version == 18
-        run: npm ci --omit=dev
-      - if: matrix.node-version == 24
-        run: npm ci
-      - if: matrix.node-version == 24
+      - run: npm ci
+      - if: matrix.node-version == '24'
         run: npm run lint
       - run: npm test

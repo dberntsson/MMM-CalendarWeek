@@ -113,8 +113,7 @@ config: {
 
 ### Calendar downloads
 
-The downloader requires Node.js 18 or later and supports the existing Basic,
-Bearer, and Digest settings. Digest supports legacy MD5 and MD5-sess as well
+The downloader supports Basic, Bearer, and Digest authentication. Digest supports legacy MD5 and MD5-sess as well
 as SHA-256 and SHA-512-256 variants, with `qop=auth` or without a qop.
 
 Each download attempt has a 10-second deadline covering redirects,
@@ -123,3 +122,15 @@ authentication, and the response body. Network failures, timeouts, HTTP 408,
 for more than two seconds via `Retry-After` waits for the normal refresh cycle.
 Authentication and parsing failures surface through the existing fetch-error
 notification. Credentials are stripped when a redirect changes origin.
+
+### Node.js support and development
+
+This fork follows the Node.js requirement of the targeted MagicMirror release.
+Use Node.js 22.22.2 or later on the 22.x line, or Node.js 24 and later (`>=22.22.2 <23 || >=24`).
+The node helper runs in the MagicMirror process.
+
+CI runs `npm ci` and `npm test` on Node.js 22.22.2 and 24.
+Use Node.js 24 for development and run `npm run lint` before committing.
+
+The ESLint-scoped `minimatch` override addresses [GHSA-g3hv-75wg-m249](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+When ESLint's own dependency range resolves to a patched version, remove the override, regenerate the lockfile, and verify with `npm audit`, `npm run lint`, and `npm test`.
