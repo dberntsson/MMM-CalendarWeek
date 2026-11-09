@@ -56,194 +56,200 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 			}
 		}
 
-		ical.fromURL(url, opts, function(err, data) {
-			fetching = false;
-			if (err) {
-				fetchFailedCallback(self, err);
+		function handleResult(err, data) {
+			let failure = err;
+			try {
+				if (!failure) {
+					const result = processCalendar(data);
+					events = result.events;
+					self.broadcastEvents();
+					if (result.skipped > 0) {
+						failure = new Error("Skipped " + result.skipped + " invalid calendar event(s)");
+					}
+				}
+			} catch (error) {
+				failure = error;
+			} finally {
+				fetching = false;
 				scheduleTimer();
-				return;
 			}
+			if (failure) fetchFailedCallback(self, failure);
+		}
 
-			// console.log(data);
-			const newEvents = [];
+		try {
+			ical.fromURL(url, opts, handleResult);
+		} catch (error) {
+			if (!fetching) throw error;
+			handleResult(error);
+		}
+	};
 
-			var eventDate = function(event, time) {
-				return (event[time].length === 8) ? moment(event[time], "YYYYMMDD") : moment(new Date(event[time]));
-			};
+	function processCalendar(data) {
+		const newEvents = [];
+		let skipped = 0;
 
-			for (var e in data) {
-				var event = data[e];
-				var now = new Date();
-				var today = moment().startOf("day").toDate();
-				var future = moment().startOf("day").add(maximumNumberOfDays, "days").toDate();
-				var past = today;
+		var eventDate = function(event, time) {
+			const value = event[time];
+			if (value == null) return moment.invalid();
+			return value.length === 8 ? moment(value, "YYYYMMDD", true) : moment(new Date(value));
+		};
 
-				if (includePastEvents) {
-					past = moment().startOf("day").subtract(maximumNumberOfDays, "days").toDate();
+		const now = new Date();
+		const dayStart = moment(now).startOf("day");
+		const today = dayStart.toDate();
+		const future = dayStart.clone().add(maximumNumberOfDays, "days").toDate();
+		const past = includePastEvents ? dayStart.clone().subtract(maximumNumberOfDays, "days").toDate() : today;
+
+		for (var e in data) {
+			var event = data[e];
+			if (!event || event.type !== "VEVENT") continue;
+			const previousCount = newEvents.length;
+			try {
+				// Preserve the legacy single-occurrence behavior for Facebook birthdays.
+				const isFacebookBirthday = typeof event.uid === "string" && event.uid.includes("@facebook.com");
+				var startDate = eventDate(event, "start");
+				if (!startDate.isValid()) throw new Error("Invalid DTSTART");
+				var endDate;
+				if (typeof event.end !== "undefined") {
+					endDate = eventDate(event, "end");
+				} else if(typeof event.duration !== "undefined") {
+					const dur = moment.duration(event.duration);
+					endDate = startDate.clone().add(dur);
+				} else if (event.start.dateOnly || event.start.length === 8 || isFacebookBirthday) {
+					endDate = startDate.clone().add(1, "day");
+				} else {
+					endDate = startDate;
 				}
+				if (!endDate.isValid() || endDate.isBefore(startDate)) throw new Error("Invalid event end");
 
-				// FIXME:
-				// Ugly fix to solve the facebook birthday issue.
-				// Otherwise, the recurring events only show the birthday for next year.
-				var isFacebookBirthday = false;
-				if (typeof event.uid !== "undefined") {
-					if (event.uid.indexOf("@facebook.com") !== -1) {
-						isFacebookBirthday = true;
-					}
-				}
+				var title = getTitleFromEvent(event);
 
-				if (event.type === "VEVENT") {
+				var excluded = false,
+					dateFilter = null;
 
-					var startDate = eventDate(event, "start");
-					var endDate;
-					if (typeof event.end !== "undefined") {
-						endDate = eventDate(event, "end");
-					} else if(typeof event.duration !== "undefined") {
-						const dur = moment.duration(event.duration);
-						endDate = startDate.clone().add(dur);
-					} else {
-						if (!isFacebookBirthday) {
-							endDate = startDate;
+				for (var f in excludedEvents) {
+					var filter = excludedEvents[f],
+						testTitle = title.toLowerCase(),
+						until = null,
+						useRegex = false,
+						regexFlags = "g";
+
+					if (filter instanceof Object) {
+						if (typeof filter.until !== "undefined") {
+							until = filter.until;
+						}
+
+						if (typeof filter.regex !== "undefined") {
+							useRegex = filter.regex;
+						}
+
+						// If additional advanced filtering is added in, this section
+						// must remain last as we overwrite the filter object with the
+						// filterBy string
+						if (filter.caseSensitive) {
+							filter = filter.filterBy;
+							testTitle = title;
+						} else if (useRegex) {
+							filter = filter.filterBy;
+							testTitle = title;
+							regexFlags += "i";
 						} else {
-							endDate = moment(startDate).add(1, "days");
-						}
-					}
-
-					if (event.start.length === 8) {
-						startDate = startDate.startOf("day");
-					}
-
-					var title = getTitleFromEvent(event);
-
-					var excluded = false,
-						dateFilter = null;
-
-					for (var f in excludedEvents) {
-						var filter = excludedEvents[f],
-							testTitle = title.toLowerCase(),
-							until = null,
-							useRegex = false,
-							regexFlags = "g";
-
-						if (filter instanceof Object) {
-							if (typeof filter.until !== "undefined") {
-								until = filter.until;
-							}
-
-							if (typeof filter.regex !== "undefined") {
-								useRegex = filter.regex;
-							}
-
-							// If additional advanced filtering is added in, this section
-							// must remain last as we overwrite the filter object with the
-							// filterBy string
-							if (filter.caseSensitive) {
-								filter = filter.filterBy;
-								testTitle = title;
-							} else if (useRegex) {
-								filter = filter.filterBy;
-								testTitle = title;
-								regexFlags += "i";
-							} else {
-								filter = filter.filterBy.toLowerCase();
-							}
-						} else {
-							filter = filter.toLowerCase();
-						}
-
-						if (testTitleByFilter(testTitle, filter, useRegex, regexFlags)) {
-							if (until) {
-								dateFilter = until;
-							} else {
-								excluded = true;
-							}
-							break;
-						}
-					}
-
-					if (excluded) {
-						continue;
-					}
-
-					var location = event.location || false;
-					var geo = event.geo || false;
-					var description = event.description || false;
-
-					if (typeof event.rrule !== "undefined" && event.rrule !== null && !isFacebookBirthday) {
-						for (var occurrence of expandOccurrences(event, startDate, endDate, past, future)) {
-							if (timeFilterApplies(now, occurrence.end, dateFilter)) continue;
-							newEvents.push({
-								title: getTitleFromEvent(occurrence.event),
-								startDate: occurrence.start.format("x"),
-								endDate: occurrence.end.format("x"),
-								fullDayEvent: isFullDayEvent(occurrence.event),
-								class: event.class,
-								firstYear: event.start.getFullYear(),
-								location: location,
-								geo: geo,
-								description: description
-							});
+							filter = filter.filterBy.toLowerCase();
 						}
 					} else {
-						// console.log("Single event ...");
-						// Single event.
-						var fullDayEvent = (isFacebookBirthday) ? true : isFullDayEvent(event);
+						filter = filter.toLowerCase();
+					}
 
-						if (includePastEvents) {
-							if (endDate < past) {
-								//console.log("Past event is too far in the past.  So skip: " + title);
-								continue;
-							}
+					if (testTitleByFilter(testTitle, filter, useRegex, regexFlags)) {
+						if (until) {
+							dateFilter = until;
 						} else {
-							if (!fullDayEvent && endDate < new Date()) {
-								//console.log("It's not a fullday event, and it is in the past. So skip: " + title);
-								continue;
-							}
-
-							if (fullDayEvent && endDate <= today) {
-								//console.log("It's a fullday event, and it is before today. So skip: " + title);
-								continue;
-							}
+							excluded = true;
 						}
+						break;
+					}
+				}
 
-						if (startDate >= future) {
-							//console.log("It exceeds the maximumNumberOfDays limit. So skip: " + title);
-							continue;
-						}
+				if (excluded) {
+					continue;
+				}
 
-						if (timeFilterApplies(now, endDate, dateFilter)) {
-							continue;
-						}
+				var location = event.location || false;
+				var geo = event.geo || false;
+				var description = event.description || false;
 
-						// Every thing is good. Add it to the list.
-
+				if (typeof event.rrule !== "undefined" && event.rrule !== null && !isFacebookBirthday) {
+					for (var occurrence of expandOccurrences(event, startDate, endDate, past, future)) {
+						if (timeFilterApplies(now, occurrence.end, dateFilter)) continue;
 						newEvents.push({
-							title: title,
-							startDate: startDate.format("x"),
-							endDate: endDate.format("x"),
-							fullDayEvent: fullDayEvent,
+							title: getTitleFromEvent(occurrence.event),
+							startDate: occurrence.start.format("x"),
+							endDate: occurrence.end.format("x"),
+							fullDayEvent: isFullDayEvent(occurrence.event),
 							class: event.class,
+							firstYear: event.start.getFullYear(),
 							location: location,
 							geo: geo,
 							description: description
 						});
-
 					}
+				} else {
+					// console.log("Single event ...");
+					// Single event.
+					var fullDayEvent = (isFacebookBirthday) ? true : isFullDayEvent(event);
+
+					if (includePastEvents) {
+						if (endDate < past) {
+							//console.log("Past event is too far in the past.  So skip: " + title);
+							continue;
+						}
+					} else {
+						if (!fullDayEvent && endDate < new Date()) {
+							//console.log("It's not a fullday event, and it is in the past. So skip: " + title);
+							continue;
+						}
+
+						if (fullDayEvent && endDate <= today) {
+							//console.log("It's a fullday event, and it is before today. So skip: " + title);
+							continue;
+						}
+					}
+
+					if (startDate >= future) {
+						//console.log("It exceeds the maximumNumberOfDays limit. So skip: " + title);
+						continue;
+					}
+
+					if (timeFilterApplies(now, endDate, dateFilter)) {
+						continue;
+					}
+
+					// Every thing is good. Add it to the list.
+
+					newEvents.push({
+						title: title,
+						startDate: startDate.format("x"),
+						endDate: endDate.format("x"),
+						fullDayEvent: fullDayEvent,
+						class: event.class,
+						location: location,
+						geo: geo,
+						description: description
+					});
+
 				}
+			} catch {
+				newEvents.length = previousCount;
+				skipped++;
 			}
+		}
 
-			newEvents.sort(function(a, b) {
-				return a.startDate - b.startDate;
-			});
-
-			//console.log(newEvents);
-
-			events = newEvents.slice(0, maximumEntries);
-
-			self.broadcastEvents();
-			scheduleTimer();
+		newEvents.sort(function(a, b) {
+			return a.startDate - b.startDate;
 		});
-	};
+
+		return { events: newEvents.slice(0, maximumEntries), skipped };
+	}
 
 	/* scheduleTimer()
 	 * Schedule the timer for the next update.
