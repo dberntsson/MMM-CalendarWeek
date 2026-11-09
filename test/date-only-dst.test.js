@@ -16,7 +16,7 @@ function regressionCases() {
     return 'BEGIN:VEVENT\nUID:test@example.invalid\nSUMMARY:Test\n' + fields + '\nEND:VEVENT';
   }
   function fetch(data, day, days) {
-    const now = moment(day).add(12, 'hours').valueOf();
+    const now = moment(day).startOf('day').valueOf();
     const previousNow = moment.now;
     moment.now = () => now;
     class Clock extends Date {
@@ -88,6 +88,7 @@ function regressionCases() {
   assert.deepEqual(midnightReminders.map(e => [date(e.startDate), date(e.endDate)]), [
     ['2026-11-02 00:00', '2026-11-02 00:00']
   ]);
+  assert.equal(midnightReminders[0].fullDayEvent, false);
 
   const movedReminder = event('RECURRENCE-ID:20261102T100000\nDTSTART:20261102T110000');
   const movedReminders = fetch(parse(event(reminderStart + '\nRRULE:FREQ=DAILY;COUNT=2') + '\n' + movedReminder), '2026-11-01', 3);

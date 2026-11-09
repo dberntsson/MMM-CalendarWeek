@@ -99,6 +99,10 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 		const today = dayStart.toDate();
 		const future = dayStart.clone().add(maximumNumberOfDays, "days").toDate();
 		const past = includePastEvents ? dayStart.clone().subtract(maximumNumberOfDays, "days").toDate() : today;
+		const hasEnded = (end, fullDayEvent) => {
+			if (includePastEvents) return end < past;
+			return fullDayEvent ? end <= today : end < now;
+		};
 
 		for (var e in data) {
 			var event = data[e];
@@ -180,12 +184,13 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 
 				if (typeof event.rrule !== "undefined" && event.rrule !== null && !isFacebookBirthday) {
 					for (var occurrence of expandOccurrences(event, startDate, endDate, past, future)) {
-						if (timeFilterApplies(now, occurrence.end, dateFilter)) continue;
+						const fullDayEvent = isFullDayEvent(occurrence.event);
+						if (hasEnded(occurrence.end, fullDayEvent) || timeFilterApplies(now, occurrence.end, dateFilter)) continue;
 						newEvents.push({
 							title: getTitleFromEvent(occurrence.event),
 							startDate: occurrence.start.format("x"),
 							endDate: occurrence.end.format("x"),
-							fullDayEvent: isFullDayEvent(occurrence.event),
+							fullDayEvent: fullDayEvent,
 							class: event.class,
 							firstYear: event.start.getFullYear(),
 							location: location,
@@ -198,22 +203,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 					// Single event.
 					var fullDayEvent = (isFacebookBirthday) ? true : isFullDayEvent(event);
 
-					if (includePastEvents) {
-						if (endDate < past) {
-							//console.log("Past event is too far in the past.  So skip: " + title);
-							continue;
-						}
-					} else {
-						if (!fullDayEvent && endDate < new Date()) {
-							//console.log("It's not a fullday event, and it is in the past. So skip: " + title);
-							continue;
-						}
-
-						if (fullDayEvent && endDate <= today) {
-							//console.log("It's a fullday event, and it is before today. So skip: " + title);
-							continue;
-						}
-					}
+					if (hasEnded(endDate, fullDayEvent)) continue;
 
 					if (startDate >= future) {
 						//console.log("It exceeds the maximumNumberOfDays limit. So skip: " + title);
@@ -280,7 +270,7 @@ var CalendarFetcher = function(url, reloadInterval, excludedEvents, maximumEntri
 		var start = event.start || 0;
 		var startDate = new Date(start);
 		var end = event.end || 0;
-		if (((end - start) % (24 * 60 * 60 * 1000)) === 0 && startDate.getHours() === 0 && startDate.getMinutes() === 0) {
+		if (end > start && ((end - start) % (24 * 60 * 60 * 1000)) === 0 && startDate.getHours() === 0 && startDate.getMinutes() === 0) {
 			// Is 24 hours, and starts on the middle of the night.
 			return true;
 		}

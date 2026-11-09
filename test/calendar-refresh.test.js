@@ -14,8 +14,8 @@ function calendar(...entries) {
   ).join('\n') + '\nEND:VCALENDAR');
 }
 
-function runRefreshes(...responses) {
-  const now = new Date(2026, 10, 9, 10).valueOf();
+function runRefreshes(responses, { hour = 10, maximumEntries = 20, includePastEvents = false } = {}) {
+  const now = new Date(2026, 10, 9, hour).valueOf();
   const clock = (...args) => args.length ? moment(...args) : moment(now);
   clock.invalid = moment.invalid;
   class Clock extends Date {
@@ -33,14 +33,14 @@ function runRefreshes(...responses) {
     setTimeout: callback => timers.push(callback), clearTimeout: () => {}
   };
   vm.runInNewContext(source, context);
-  const fetcher = new context.module.exports('fixture', 300000, [], 20, 4);
+  const fetcher = new context.module.exports('fixture', 300000, [], maximumEntries, 4, undefined, includePastEvents);
   fetcher.onError((sender, error) => errors.push(error.message));
   fetcher.startFetch();
   return { fetcher, timers, errors };
 }
 
 test('date-only DTSTART defaults to a full day with an exclusive end', () => {
-  const { fetcher, errors } = runRefreshes(calendar('SUMMARY:All day\nDTSTART;VALUE=DATE:20261109'));
+  const { fetcher, errors } = runRefreshes([calendar('SUMMARY:All day\nDTSTART;VALUE=DATE:20261109')]);
   const events = fetcher.events();
   assert.equal(events.length, 1);
   assert.equal(events[0].fullDayEvent, true);
@@ -55,7 +55,7 @@ test('skips malformed events and still publishes valid entries and refreshes', (
     'SUMMARY:Invalid end\nDTSTART;VALUE=DATE:20261109\nDTEND:invalid',
     'SUMMARY:Valid\nDTSTART;VALUE=DATE:20261109'
   );
-  const { fetcher, timers, errors } = runRefreshes(mixed, calendar('SUMMARY:Next refresh\nDTSTART;VALUE=DATE:20261109'));
+  const { fetcher, timers, errors } = runRefreshes([mixed, calendar('SUMMARY:Next refresh\nDTSTART;VALUE=DATE:20261109')]);
   assert.equal(fetcher.events().length, 1);
   assert.equal(fetcher.events()[0].title, 'Valid');
   assert.deepEqual(errors, ['Skipped 2 invalid calendar event(s)']);
@@ -69,7 +69,7 @@ test('keeps the last good data and schedules another refresh after a processing 
   const first = calendar('SUMMARY:Last good event\nDTSTART;VALUE=DATE:20261109');
   const broken = new Proxy({}, { ownKeys() { throw new Error('Feed processing failed'); } });
   const next = calendar('SUMMARY:Recovered\nDTSTART;VALUE=DATE:20261109');
-  const { fetcher, timers, errors } = runRefreshes(first, broken, next);
+  const { fetcher, timers, errors } = runRefreshes([first, broken, next]);
   timers.shift()();
   assert.equal(fetcher.events()[0].title, 'Last good event');
   assert.deepEqual(errors, ['Feed processing failed']);
@@ -77,4 +77,25 @@ test('keeps the last good data and schedules another refresh after a processing 
   timers.shift()();
   assert.equal(fetcher.events()[0].title, 'Recovered');
   assert.equal(timers.length, 1);
+});
+
+test('filters finished recurrences before applying maximumEntries', () => {
+  const feed = calendar(
+    'SUMMARY:Morning series\nDTSTART:20261109T080000\nDTEND:20261109T090000\nRRULE:FREQ=DAILY;COUNT=2',
+    'SUMMARY:Afternoon event\nDTSTART:20261109T130000\nDTEND:20261109T140000'
+  );
+  const current = runRefreshes([feed], { hour: 12, maximumEntries: 1 });
+  assert.deepEqual(Array.from(current.fetcher.events(), event => event.title), ['Afternoon event']);
+
+  const history = runRefreshes([feed], { hour: 12, maximumEntries: 1, includePastEvents: true });
+  assert.deepEqual(Array.from(history.fetcher.events(), event => event.title), ['Morning series']);
+});
+
+test('keeps ongoing recurring events eligible for maximumEntries', () => {
+  const feed = calendar(
+    'SUMMARY:Ongoing series\nDTSTART:20261109T080000\nDTEND:20261109T123000\nRRULE:FREQ=DAILY;COUNT=2',
+    'SUMMARY:Afternoon event\nDTSTART:20261109T130000\nDTEND:20261109T140000'
+  );
+  const { fetcher } = runRefreshes([feed], { hour: 12, maximumEntries: 1 });
+  assert.deepEqual(Array.from(fetcher.events(), event => event.title), ['Ongoing series']);
 });
