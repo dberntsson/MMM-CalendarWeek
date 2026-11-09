@@ -26,7 +26,7 @@ function setup() {
   const context = {
     require: name => {
       if (name === 'node_helper') return { create: definition => definition };
-      if (name === 'valid-url') return require('valid-url');
+      if (name === './vendor/ical.js/http-url') return require('../vendor/ical.js/http-url');
       return Fetcher;
     },
     module: { exports: {} }, console: { log() {} }
@@ -38,7 +38,7 @@ function setup() {
     for (const instance of instances) instance.socketNotificationReceived(name, payload);
   };
 
-  function register(identifier, settings = {}, auth) {
+  function register(identifier, settings = {}, auth, feedUrl = url) {
     let definition;
     const errors = [];
     vm.runInNewContext(moduleSource, {
@@ -47,12 +47,12 @@ function setup() {
     });
     Object.assign(definition, {
       identifier, errors, calendarData: {}, updates: 0,
-      config: { ...definition.defaults, calendars: [{ url }], broadcastEvents: false, ...settings },
+      config: { ...definition.defaults, calendars: [{ url: feedUrl }], broadcastEvents: false, ...settings },
       sendSocketNotification: (name, payload) => helper.socketNotificationReceived(name, payload),
       updateDom() { this.updates++; }
     });
     instances.push(definition);
-    definition.addCalendar(url, auth, {});
+    definition.addCalendar(feedUrl, auth, {});
     return definition;
   }
   return { register, downloads };
@@ -101,4 +101,16 @@ test('the same URL with different credentials uses separate downloads', () => {
   register('module_1', {}, { method: 'bearer', pass: 'fixture-a' });
   register('module_2', {}, { method: 'bearer', pass: 'fixture-b' });
   assert.equal(downloads.length, 2);
+});
+
+test('rejects unsupported and malformed calendar URLs before creating a fetcher', () => {
+  const { register, downloads } = setup();
+  const valid = register('valid');
+  const ftp = register('ftp', {}, undefined, 'ftp://example.invalid/calendar.ics');
+  const malformed = register('malformed', {}, undefined, 'not-a-url');
+
+  assert.equal(downloads.length, 1);
+  assert.deepEqual(ftp.errors, ['Calendar error: Calendar URL must use HTTP or HTTPS']);
+  assert.deepEqual(malformed.errors, ['Calendar error: Invalid calendar URL']);
+  assert.deepEqual(valid.errors, []);
 });

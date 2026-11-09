@@ -1,22 +1,10 @@
 const { setTimeout: delay } = require('node:timers/promises');
 const digestAuthorization = require('./digest-auth');
+const httpUrl = require('./http-url');
 
 const retryableStatuses = new Set([408, 429, 500, 502, 503, 504]);
 const redirectStatuses = new Set([301, 302, 303, 307, 308]);
 const maxRetryDelay = 2000;
-
-function httpUrl(value, base) {
-  let url;
-  try {
-    url = new URL(value, base);
-  } catch {
-    throw new Error('Invalid calendar URL');
-  }
-  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-    throw new Error('Calendar URL must use HTTP or HTTPS');
-  }
-  return url;
-}
 
 async function request(url, headers, auth, signal) {
   for (let redirects = 0; ; redirects++) {

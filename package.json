@@ -2,8 +2,7 @@
     "dependencies": {
         "moment": "^2.29.4",
         "moment-timezone": "^0.6.0",
-        "rrule": "^2.8.1",
-        "valid-url": "^1.0.9"
+        "rrule": "^2.8.1"
     },
     "scripts": {
         "test": "node --test test/*.test.js",

@@ -4,7 +4,7 @@ export default [
   {
     ignores: [
       "vendor/ical.js/**/*",
-      "!vendor/ical.js/{date-only-rule,digest-auth,download-calendar,node-ical,timed-rule}.js"
+      "!vendor/ical.js/{date-only-rule,digest-auth,download-calendar,http-url,node-ical,timed-rule}.js"
     ]
   },
   {

@@ -128,7 +128,7 @@ Module.register("MMM-CalendarWeek", {
 				Log.error("Calendar error: " + payload.error);
 			}
 		} else if (notification === "INCORRECT_URL") {
-			Log.error("Calendar Error. Incorrect url: " + payload.url);
+			Log.error("Calendar error: " + payload.error);
 		} else {
 			Log.log("Calendar received an unknown socket notification: " + notification);
 		}

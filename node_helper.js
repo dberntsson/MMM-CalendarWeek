@@ -6,7 +6,7 @@
  */
 
 var NodeHelper = require("node_helper");
-var validUrl = require("valid-url");
+var httpUrl = require("./vendor/ical.js/http-url");
 var CalendarFetcher = require("./calendarfetcher.js");
 
 // Use only settings consumed by CalendarFetcher. Filter order is significant.
@@ -33,8 +33,10 @@ module.exports = NodeHelper.create({
 
 	createFetcher: function(settings) {
 		const { identifier, url, fetchInterval, excludedEvents, maximumEntries, maximumNumberOfDays, auth } = settings;
-		if (!validUrl.isUri(url)) {
-			this.sendSocketNotification("INCORRECT_URL", { identifier, url });
+		try {
+			httpUrl(url);
+		} catch (error) {
+			this.sendSocketNotification("INCORRECT_URL", { identifier, error: error.message });
 			return;
 		}
 
