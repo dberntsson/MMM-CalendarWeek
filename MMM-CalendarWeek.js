@@ -138,17 +138,18 @@ Module.register("MMM-CalendarWeek", {
 	// Override dom generator.
 	getDom: function () {
 
-		var upcommingDays = {}
+		var now = moment();
+		var today = now.clone().startOf("day");
+		var upcomingDays = [];
+		var dayStart = today;
 
-		var day = moment()
-		var endOfCalendarWeek = day.clone().add(this.config.maximumNumberOfDays, 'days');
-
-		while (day < endOfCalendarWeek) {
-			upcommingDays[day] = [];
-			day = day.clone().add(1, 'day');
+		for (var dayIndex = 0; dayIndex < this.config.maximumNumberOfDays; dayIndex++) {
+			var nextDayStart = dayStart.clone().add(1, "day");
+			upcomingDays.push({ start: dayStart, end: nextDayStart, events: [] });
+			dayStart = nextDayStart;
 		}
 
-		var events = this.createEventList();
+		var events = this.createEventList(now);
 		var wrapper = document.createElement("table");
 		wrapper.className = this.config.tableClass;
 
@@ -159,84 +160,13 @@ Module.register("MMM-CalendarWeek", {
 		}
 
 
-		/* Sort the event into correct array of days. */
-		for (var e in events) {
-			var event = events[e];
-
-			var endMoment = moment(event.endDate, "x");
-			var startMoment = moment(event.startDate, "x");
-
-			for (day in upcommingDays) {
-
-				//Processing for multi day events
-				if (this.isMultiDayEvent(event)){
-					//Multiday, starting or ending this day
-					if (startMoment.isSame(day, 'day')){
-						//If it starts at 00:00 and does not end this day, its a full day event and should
-						//be displayed without start time
-						if (startMoment.hours() == 0 && startMoment.minutes() == 0){
-							upcommingDays[day].push({
-								description: event.description,
-								fullDayEvent: true,
-								geo: event.geo,
-								location: event.location,
-								title: event.title,
-								today: event.today,
-								url: event.url
-							});
-						} else {
-							//Set end date like end of the day to fully support "showEndDate"-option
-							upcommingDays[day].push({
-								description: event.description,
-								fullDayEvent: event.fullDayEvent,
-								geo: event.geo,
-								startDate: event.startDate,
-								endDate: moment(event.endDate, 'x').endOf('day'),
-								location: event.location,
-								title: event.title,
-								today: event.today,
-								url: event.url
-							});
-						}
-					//Multiday, day is within start and end
-					} else if (moment(day).isBetween(startMoment, endMoment)) {
-						upcommingDays[day].push({
-							description: event.description,
-							fullDayEvent: true,
-							geo: event.geo,
-							location: event.location,
-							title: event.title,
-							today: event.today,
-							url: event.url
-						});
-					//Multiday, ending this day
-					} else if (endMoment.isSame(day, 'day')){
-						//if ending at 00:00, it actually ended the day before and should
-						//not be displayed
-						//Set start Day to midnight at start of this day
-						if ( !(endMoment.hours() == 0 && endMoment.minutes() == 0)) {
-							upcommingDays[day].push({
-								description: event.description,
-								fullDayEvent: !this.config.showEndDate,
-								endDate: event.endDate,
-								startDate: moment(event.startDate, 'x').startOf('day'),
-								geo: event.geo,
-								location: event.location,
-								title: event.title,
-								today: event.today,
-								url: event.url
-							});
-						}
-					}
+		for (var event of events) {
+			var start = moment(event.startDate, "x");
+			var end = moment(event.endDate, "x");
+			for (var day of upcomingDays) {
+				if (start < day.end && (end > day.start || (start.isSame(end) && start >= day.start))) {
+					day.events.push(event);
 				}
-				//Single day events
-				else if (startMoment.isSame(day, 'day')){
-					upcommingDays[day].push(event);
-				}
-				else if (event.fullDayEvent && moment(day).isBetween(startMoment, endMoment)){
-					upcommingDays[day].push(event);
-				}
-
 			}
 		}
 
@@ -245,9 +175,9 @@ Module.register("MMM-CalendarWeek", {
 		var row = document.createElement("tr");
 
 		/* Generate the view */
-		for (day in upcommingDays) {
-
-			events = upcommingDays[day];
+		for (var day of upcomingDays) {
+			events = day.events;
+			var daysFromToday = day.start.diff(today, "days");
 
 			/* Skip processing if we have no events and want to hide empty days */
 			if (events.length < 1 && this.config.hideEmptyDays){
@@ -258,7 +188,7 @@ Module.register("MMM-CalendarWeek", {
 
 			col.className = "normal col";
 
-			var dateAsString = moment(moment(day), "x").format(this.config.dateFormat);
+			var dateAsString = day.start.format(this.config.dateFormat);
 
 			if(this.config.timeFormat === "dateheaders"){
 				if(lastSeenDate !== dateAsString){
@@ -357,11 +287,15 @@ Module.register("MMM-CalendarWeek", {
 
 				if(this.config.timeFormat === "dateheaders"){
 
-					if (event.fullDayEvent) {
+					var eventStart = moment(event.startDate, "x");
+					var eventEnd = moment(event.endDate, "x");
+					var showStartTime = !event.fullDayEvent && eventStart >= day.start && eventStart < day.end;
+					var showEndTime = !event.fullDayEvent && this.config.showEndDate &&
+						eventEnd >= day.start && eventEnd <= day.end;
+					if (!showStartTime && !showEndTime) {
 						titleWrapper.colSpan = "2";
 						titleWrapper.align = "left";
-
-					}else{
+					} else {
 						var timeWrapper = document.createElement("td");
 						timeWrapper.className = "time light";
 						timeWrapper.align = "left";
@@ -381,11 +315,10 @@ Module.register("MMM-CalendarWeek", {
 							break;
 						}
 						}
-						timeWrapper.textContent = moment(event.startDate, "x").format(timeFormatString);
-
-						if (this.config.showEndDate) {
-							timeWrapper.appendChild(document.createElement("br"));
-							timeWrapper.appendChild(document.createTextNode(moment(event.endDate, "x").format(timeFormatString)));
+						if (showStartTime) timeWrapper.textContent = eventStart.format(timeFormatString);
+						if (showEndTime) {
+							if (showStartTime) timeWrapper.appendChild(document.createElement("br"));
+							timeWrapper.appendChild(document.createTextNode(eventEnd.format(timeFormatString)));
 						}
 
 						eventWrapper.appendChild(timeWrapper);
@@ -397,23 +330,18 @@ Module.register("MMM-CalendarWeek", {
 					var timeWrapper = document.createElement("td");
 
 					eventWrapper.appendChild(titleWrapper);
-					//console.log(event.today);
-					var now = new Date();
-					// Define second, minute, hour, and day variables
-					var oneSecond = 1000; // 1,000 milliseconds
-					var oneMinute = oneSecond * 60;
-					var oneHour = oneMinute * 60;
-					var oneDay = oneHour * 24;
+					var oneHour = 60 * 60 * 1000;
+					var eventStart = moment(event.startDate, "x");
 					if (event.fullDayEvent) {
-						if (event.today) {
+						if (daysFromToday === 0) {
 							timeWrapper.innerHTML = this.capFirst(this.translate("TODAY"));
-						} else if (event.startDate - now < oneDay && event.startDate - now > 0) {
+						} else if (daysFromToday === 1) {
 							timeWrapper.innerHTML = this.capFirst(this.translate("TOMORROW"));
-						} else if (event.startDate - now < 2 * oneDay && event.startDate - now > 0) {
+						} else if (daysFromToday === 2) {
 							if (this.translate("DAYAFTERTOMORROW") !== "DAYAFTERTOMORROW") {
 								timeWrapper.innerHTML = this.capFirst(this.translate("DAYAFTERTOMORROW"));
 							} else {
-								timeWrapper.innerHTML = this.capFirst(moment(event.startDate, "x").fromNow());
+								timeWrapper.innerHTML = this.capFirst(day.start.from(now));
 							}
 						} else {
 							/* Check to see if the user displays absolute or relative dates with their events
@@ -424,20 +352,20 @@ Module.register("MMM-CalendarWeek", {
 							* Note: this needs to be put in its own function, as the whole thing repeats again verbatim
 							*/
 							if (this.config.timeFormat === "absolute") {
-								if ((this.config.urgency > 1) && (event.startDate - now < (this.config.urgency * oneDay))) {
+								if ((this.config.urgency > 1) && (day.start < now.clone().add(this.config.urgency, "days"))) {
 									// This event falls within the config.urgency period that the user has set
-									timeWrapper.innerHTML = this.capFirst(moment(event.startDate, "x").fromNow());
+									timeWrapper.innerHTML = this.capFirst(day.start.from(now));
 								} else {
-									timeWrapper.innerHTML = this.capFirst(moment(event.startDate, "x").format(this.config.fullDayEventDateFormat));
+									timeWrapper.innerHTML = this.capFirst(day.start.format(this.config.fullDayEventDateFormat));
 								}
 							} else {
-								timeWrapper.innerHTML = this.capFirst(moment(event.startDate, "x").fromNow());
+								timeWrapper.innerHTML = this.capFirst(day.start.from(now));
 							}
 						}
 					} else {
-						if (event.startDate >= new Date()) {
-							if (event.startDate - now < 2 * oneDay) {
-								// This event is within the next 48 hours (2 days)
+						if (eventStart >= now) {
+							if (eventStart < today.clone().add(2, "days")) {
+								// The event starts today or tomorrow.
 								if (event.startDate - now < this.config.getRelative * oneHour) {
 									// If event is within 6 hour, display 'in xxx' time format or moment.fromNow()
 									timeWrapper.innerHTML = this.capFirst(moment(event.startDate, "x").fromNow());
@@ -454,7 +382,7 @@ Module.register("MMM-CalendarWeek", {
 								* Note: this needs to be put in its own function, as the whole thing repeats again verbatim
 								*/
 								if (this.config.timeFormat === "absolute") {
-									if ((this.config.urgency > 1) && (event.startDate - now < (this.config.urgency * oneDay))) {
+									if ((this.config.urgency > 1) && (eventStart < now.clone().add(this.config.urgency, "days"))) {
 										// This event falls within the config.urgency period that the user has set
 										timeWrapper.innerHTML = this.capFirst(moment(event.startDate, "x").fromNow());
 									} else {
@@ -604,10 +532,8 @@ Module.register("MMM-CalendarWeek", {
 	 *
 	 * return array - Array with events.
 	 */
-	createEventList: function () {
+	createEventList: function (now = moment()) {
 		var events = [];
-		var today = moment().startOf("day");
-		var now = new Date();
 		for (var c in this.calendarData) {
 			var calendar = this.calendarData[c];
 			for (var e in calendar) {
@@ -631,7 +557,6 @@ Module.register("MMM-CalendarWeek", {
 					continue;
 				}
 				event.url = c;
-				event.today = event.startDate >= today && event.startDate < (today + 24 * 60 * 60 * 1000);
 				events.push(event);
 			}
 		}
@@ -764,18 +689,6 @@ Module.register("MMM-CalendarWeek", {
 			if (index > 0) element.appendChild(document.createElement("br"));
 			element.appendChild(document.createTextNode(line));
 		});
-	},
-
-	/* isMultiDayEvent(event)
-	 * Checks if an event is a munti day event
-	 *
-	 * argument event obejct - The event object to check.
-	 *
-	 * return bool - The event is a multi-day event.
-	 *
-	*/
-	isMultiDayEvent: function(event) {
-		return !moment(event.endDate, "x").isSame(moment(event.startDate, "x"), "day");
 	},
 
 	/* capFirst(string)
